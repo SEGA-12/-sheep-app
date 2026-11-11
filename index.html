@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Подключаем манифест для Android и десктопа -->
+<link rel="manifest" href="manifest.json">
+
+<!-- Специальные теги для корректной работы на iPhone (iOS) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon.svg">
+    <title>Учет Отары (Oshari)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        .tab-active { background-color: #16a34a; color: #fff; border-color: #16a34a; }
+        .tab-inactive { background-color: #fff; color: #374151; border-color: #d1d5db; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans pb-12">
+
+    <header class="bg-green-700 text-white shadow-md p-4 sticky top-0 z-40">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <h1 class="text-lg font-bold"><i class="fas fa-clipboard-list mr-2"></i>Учет Отары</h1>
+            <div class="flex gap-1.5">
+                <button onclick="shareData()" title="Поделиться базой" class="bg-green-800 hover:bg-green-900 px-2.5 py-1.5 rounded-lg text-xs transition">
+                    <i class="fas fa-share-nodes"></i>
+                </button>
+                <button onclick="exportData()" title="Скачать JSON" class="bg-green-800 hover:bg-green-900 px-2.5 py-1.5 rounded-lg text-xs transition">
+                    <i class="fas fa-download"></i>
+                </button>
+                <button onclick="document.getElementById('import-file').click()" title="Импорт базы" class="bg-green-800 hover:bg-green-900 px-2.5 py-1.5 rounded-lg text-xs transition">
+                    <i class="fas fa-upload"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div id="toast-container" class="fixed top-20 left-1/2 -translate-x-1/2 z-[60] space-y-2 pointer-events-none w-[92%] max-w-md"></div>
+
+    <main class="max-w-md mx-auto px-3 mt-4">
+        <nav class="grid grid-cols-2 gap-2 mb-5">
+            <button id="nav-register" onclick="switchTab('register')" class="tab-active border py-2.5 px-3 rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center">
+                <i class="fas fa-circle-plus mr-1.5"></i> Регистрация животного
+            </button>
+            <button id="nav-herd" onclick="switchTab('herd')" class="tab-inactive border py-2.5 px-3 rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center">
+                <i class="fas fa-list-ul mr-1.5"></i> Отара
+            </button>
+            <button id="nav-vaccines" onclick="switchTab('vaccines')" class="tab-inactive border py-2.5 px-3 rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center">
+                <i class="fas fa-syringe mr-1.5"></i> Вакцинации
+            </button>
+            <button id="nav-slaughter" onclick="switchTab('slaughter')" class="tab-inactive border py-2.5 px-3 rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center">
+                <i class="fas fa-scale-balanced mr-1.5"></i> Убой
+            </button>
+        </nav>
+
+        <section id="view-register" class="bg-white rounded-xl shadow p-5">
+            <h2 class="text-base font-bold text-gray-800 mb-4 border-b pb-2">Новая запись в отару</h2>
+            <form id="animal-form" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Фото животного</label>
+                    <div class="flex items-center gap-3">
+                        <div id="reg-photo-preview" class="w-16 h-16 rounded-lg bg-gray-100 border flex items-center justify-center overflow-hidden">
+                            <i class="fas fa-camera text-gray-400 text-xl"></i>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <button type="button" onclick="document.getElementById('reg-photo').click()" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-bold text-gray-700">
+                                <i class="fas fa-upload mr-1"></i> Загрузить
+                            </button>
+                            <button type="button" id="reg-photo-clear" onclick="clearRegPhoto()" class="hidden text-xs text-red-600 hover:text-red-700 px-3 py-1">
+                                <i class="fas fa-trash mr-1"></i> Удалить фото
+                            </button>
+                        </div>
+                        <input type="file" id="reg-photo" accept="image/*" class="hidden" onchange="handleRegPhotoChange(event)">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Номер бирки *</label>
+                    <input type="text" id="form-tag" required class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm" placeholder="Например: 006">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Категория *</label>
+                        <select id="form-type" class="w-full p-2.5 border rounded-lg text-sm bg-white">
+                            <option value="Овца">Овца (матка)</option>
+                            <option value="Баран">Баран</option>
+                            <option value="Ягненок">Ягненок (мальчик)</option>
+                            <option value="Ярка">Ярка (девочка)</option>
+                        </select>
+                        <p id="form-type-hint" class="text-[11px] text-gray-400 mt-1 hidden">Возраст &gt; 4 мес. — только Баран или Овца.</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Вес (кг)</label>
+                        <input type="number" step="0.1" id="form-weight" class="w-full p-2.5 border rounded-lg text-sm" placeholder="4.5">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Бирка отца</label>
+                        <input type="text" id="form-father" class="w-full p-2.5 border rounded-lg text-sm" placeholder="Например: 001">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Бирка матери</label>
+                        <input type="text" id="form-mother" class="w-full p-2.5 border rounded-lg text-sm" placeholder="Например: 002">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Дата рождения *</label>
+                    <input type="date" id="form-birth" required class="w-full p-2.5 border rounded-lg text-sm">
+                </div>
+                <div data-genetics-wrapper>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Генетика (породы, %)</label>
+                    <div class="genetics-container space-y-2 mb-2" id="reg-genetics-rows"></div>
+                    <div class="flex justify-between items-center">
+                        <button type="button" onclick="addGeneticsRow('reg-genetics-rows')" class="text-xs text-green-600 font-bold hover:underline">+ порода</button>
+                        <p class="genetics-sum text-xs text-gray-500">Сумма: 0%</p>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg text-sm hover:bg-green-700 transition mt-2 shadow">
+                    Сохранить животное
+                </button>
+            </form>
+        </section>
+
+        <section id="view-herd" class="hidden">
+            <div id="herd-summary" class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="p-4 bg-gray-50 border-b">
+                    <h2 class="text-base font-bold text-gray-800">Состав отары</h2>
+                    <p class="text-xs text-gray-500">Нажмите на любую строку, чтобы открыть список</p>
+                </div>
+                <div class="divide-y divide-gray-200">
+                    <div data-category="Баран" class="herd-cat p-4 flex justify-between items-center hover:bg-green-50 cursor-pointer transition">
+                        <span class="font-semibold text-gray-700 text-sm">Бараны:</span>
+                        <div class="flex items-center space-x-2">
+                            <span id="count-rams" class="font-bold text-base text-indigo-600">0</span>
+                            <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
+                        </div>
+                    </div>
+                    <div data-category="Овца" class="herd-cat p-4 flex justify-between items-center hover:bg-green-50 cursor-pointer transition">
+                        <span class="font-semibold text-gray-700 text-sm">Овцы:</span>
+                        <div class="flex items-center space-x-2">
+                            <span id="count-ewes" class="font-bold text-base text-pink-600">0</span>
+                            <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
+                        </div>
+                    </div>
+                    <div data-category="Ягненок" class="herd-cat p-4 flex justify-between items-center hover:bg-green-50 cursor-pointer transition">
+                        <span class="font-semibold text-gray-700 text-sm">Ягнята:</span>
+                        <div class="flex items-center space-x-2">
+                            <span id="count-lambs-m" class="font-bold text-base text-blue-600">0</span>
+                            <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
+                        </div>
+                    </div>
+                    <div data-category="Ярка" class="herd-cat p-4 flex justify-between items-center hover:bg-green-50 cursor-pointer transition">
+                        <span class="font-semibold text-gray-700 text-sm">Ярки:</span>
+                        <div class="flex items-center space-x-2">
+                            <span id="count-lambs-f" class="font-bold text-base text-yellow-600">0</span>
+                            <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
+                        </div>
+                    </div>
+                    <div data-category="Все" class="herd-cat p-4 bg-green-50 flex justify-between items-center hover:bg-green-100 cursor-pointer transition">
+                        <span class="font-bold text-gray-900 text-sm">Всего:</span>
+                        <div class="flex items-center space-x-2">
+                            <span id="count-total" class="font-extrabold text-lg text-green-700">0</span>
+                            <i class="fas fa-chevron-right text-green-600 text-xs"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="herd-filtered-view" class="hidden bg-white rounded-xl shadow p-4">
+                <div class="flex items-center justify-between border-b pb-3 mb-3">
+                    <button onclick="closeHerdCategory()" class="text-xs font-bold text-green-600 hover:underline flex items-center">
+                        <i class="fas fa-arrow-left mr-1"></i> Назад к составу
+                    </button>
+                    <h3 id="herd-category-title" class="text-sm font-bold text-gray-800">Список</h3>
+                </div>
+                <div id="herd-filtered-list" class="space-y-2.5"></div>
+            </div>
+        </section>
+
+        <section id="view-vaccines" class="hidden bg-white rounded-xl shadow p-4">
+            <div class="border-b pb-3 mb-3">
+                <h2 class="text-base font-bold text-gray-800">Журнал вакцинаций</h2>
+                <p class="text-xs text-gray-500">Нажмите на животное, чтобы увидеть все уколы</p>
+            </div>
+            <div id="vaccines-list" class="space-y-2.5"></div>
+        </section>
+
+        <section id="view-slaughter" class="hidden bg-white rounded-xl shadow p-4">
+            <div class="border-b pb-3 mb-3">
+                <h2 class="text-base font-bold text-gray-800">Учет убоя</h2>
+                <p class="text-xs text-gray-500">Список забитых животных и их убойный вес</p>
+            </div>
+            <div id="slaughter-list" class="space-y-2.5"></div>
+        </section>
+
+        <section id="view-detail" class="hidden bg-white rounded-xl shadow p-5">
+            <button onclick="closeAnimalDetail()" class="text-xs font-bold text-gray-600 hover:text-gray-900 mb-4 flex items-center">
+                <i class="fas fa-arrow-left mr-1.5"></i> Вернуться назад
+            </button>
+            <div id="detail-content"></div>
+        </section>
+    </main>
+
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[92vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center flex-shrink-0">
+                <h3 id="modal-title" class="text-sm font-bold text-gray-800"></h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-700 px-2">
+                    <i class="fas fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div id="modal-body" class="p-4 overflow-y-auto flex-1"></div>
+            <div id="modal-footer" class="p-4 border-t flex gap-2 flex-shrink-0"></div>
+        </div>
+    </div>
+
+    <input type="file" id="import-file" accept=".json,application/json" class="hidden" onchange="handleImport(event)">
+
+    <script>
+        // ============ IndexedDB ============
+        const DB_NAME = 'oshari_db';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'data';
+        let dbInstance = null;
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                if (dbInstance) { resolve(dbInstance); return; }
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => { dbInstance = request.result; resolve(dbInstance); };
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME);
+                    }
+                };
+            });
+        }
+
+        async function loadDataFromDB() {
+            try {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const store = tx.objectStore(STORE_NAME);
+                    const request = store.get('animals');
+                    request.onsuccess = () => resolve(request.result || null);
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (e) {
+                console.warn('IndexedDB load error:', e);
+                return null;
+            }
+        }
+
+        async function saveDataToDB(data) {
+            try {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const request = store.put(data, 'animals');
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (e) {
+                console.error('IndexedDB save error:', e);
+                alert('Ошибка сохранения в IndexedDB: ' + e.message);
+                throw e;
+            }
+        }
+
+        // ============ ДАННЫЕ ============
+        const KNOWN_BREEDS = ['Дорпер', 'Меринос', 'Гиссарская', 'Эдильбаевская', 'Романовская'];
+        const LAMB_AGE_MONTHS = 4;
+
+        let animals = []; // заполняется асинхронно при инициализации
+        let previousViewBeforeDetail = { tab: 'herd', category: null };
+        let regPhotoData = null;
+
+        const seedData = [
+            { tag: "001", type: "Баран", weight: 52, father: null, mother: null, birth: "2023-03-10", status: "активен", lambings: 0, photo: null,
+              genetics: { "Дорпер": 100 },
+              vaccines: [{ name: "Сибирская язва", date: "15.04.2024" }, { name: "Ивермек (от паразитов)", date: "10.10.2024" }] },
+            { tag: "002", type: "Овца", weight: 41, father: null, mother: null, birth: "2023-04-12", status: "активен", lambings: 1, photo: null,
+              genetics: { "Меринос": 100 },
+              vaccines: [{ name: "Сибирская язва", date: "15.04.2024" }] },
+            { tag: "003", type: "Ярка", weight: 14.5, father: "001", mother: "002", birth: "2025-02-20", status: "активен", lambings: 0, photo: null,
+              genetics: { "Дорпер": 50, "Меринос": 50 }, vaccines: [] },
+            { tag: "004", type: "Ягненок", weight: 16.0, father: "001", mother: "002", birth: "2025-02-20", status: "активен", lambings: 0, photo: null,
+              genetics: { "Дорпер": 50, "Меринос": 50 }, vaccines: [] },
+            { tag: "005", type: "Баран", weight: 35.0, slaughterWeight: 62.5, father: null, mother: null, birth: "2023-05-01", slaughterDate: "2025-01-15", status: "убой", lambings: 0, photo: null,
+              genetics: { "Гиссарская": 100 },
+              vaccines: [{ name: "Сибирская язва", date: "15.04.2024" }] }
+        ];
+
+        function normalizeAnimals(list) {
+            list.forEach(a => {
+                if (!Array.isArray(a.vaccines)) a.vaccines = [];
+                if (!a.genetics || typeof a.genetics !== 'object') a.genetics = {};
+                if (typeof a.photo !== 'string') a.photo = null;
+            });
+            return list;
+        }
+
+        async function saveData() {
+            await saveDataToDB(animals);
+        }
+
+        // ============ УТИЛИТЫ ============
+        function todayISO() {
+            const d = new Date();
+            const tz = d.getTimezoneOffset() * 60000;
+            return new Date(d - tz).toISOString().substring(0, 10);
+        }
+        function todayRU() { return new Date().toLocaleDateString('ru-RU'); }
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function sortedAnimals(list) {
+            return [...list].sort((a, b) => {
+                const na = parseFloat(a.tag), nb = parseFloat(b.tag);
+                if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                return String(a.tag).localeCompare(String(b.tag));
+            });
+        }
+
+        function isAtLeastMonths(birthDate, months) {
+            if (!birthDate) return false;
+            const birth = new Date(birthDate);
+            if (isNaN(birth.getTime())) return false;
+            const target = new Date(birth);
+            target.setMonth(target.getMonth() + months);
+            return new Date() >= target;
+        }
+
+        // ============ ФОТО (повышенное качество) ============
+        function compressImage(file, maxSize = 1200, quality = 0.85) {
+            return new Promise((resolve, reject) => {
+                if (!file || !file.type || !file.type.startsWith('image/')) {
+                    reject(new Error('Файл не является изображением')); return;
+                }
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let { width, height } = img;
+                        if (width > height) {
+                            if (width > maxSize) { height = Math.round(height * maxSize / width); width = maxSize; }
+                        } else {
+                            if (height > maxSize) { width = Math.round(width * maxSize / height); height = maxSize; }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                        try {
+                            resolve(canvas.toDataURL('image/jpeg', quality));
+                        } catch (err) {
+                            reject(new Error('Не удалось сжать фото'));
+                        }
+                    };
+                    img.onerror = () => reject(new Error('Не удалось прочитать изображение'));
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('Ошибка чтения файла'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function handleRegPhotoChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            try {
+                regPhotoData = await compressImage(file);
+                updateRegPhotoPreview();
+            } catch (err) {
+                alert('Не удалось загрузить фото: ' + err.message);
+            }
+            event.target.value = '';
+        }
+
+        function clearRegPhoto() {
+            regPhotoData = null;
+            updateRegPhotoPreview();
+        }
+
+        function updateRegPhotoPreview() {
+            const preview = document.getElementById('reg-photo-preview');
+            const clearBtn = document.getElementById('reg-photo-clear');
+            if (regPhotoData) {
+                preview.innerHTML = `<img src="${regPhotoData}" class="w-full h-full object-cover" alt="">`;
+                clearBtn.classList.remove('hidden');
+            } else {
+                preview.innerHTML = '<i class="fas fa-camera text-gray-400 text-xl"></i>';
+                clearBtn.classList.add('hidden');
+            }
+        }
+
+        function photoThumb(animal, size = 12) {
+            const cls = `w-${size} h-${size} rounded-lg border object-cover flex-shrink-0 bg-gray-100 flex items-center justify-center`;
+            if (animal.photo) {
+                return `<img src="${animal.photo}" class="${cls}" alt="">`;
+            }
+            return `<div class="${cls}"><i class="fas fa-camera text-gray-300"></i></div>`;
+        }
+
+        function openPhotoView(tag) {
+            const animal = animals.find(a => a.tag === tag);
+            if (!animal || !animal.photo) return;
+            document.getElementById('modal-title').textContent = 'Фото — животное №' + tag;
+            document.getElementById('modal-body').innerHTML = `<img src="${animal.photo}" class="w-full rounded-lg" alt="">`;
+            document.getElementById('modal-footer').innerHTML = `<button onclick="closeModal()" class="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700">Закрыть</button>`;
+            modalSubmitHandler = null;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        // ============ TOAST ============
+        function showToast(message, type = 'info', duration = 5000) {
+            const container = document.getElementById('toast-container');
+            const colors = { info: 'bg-blue-600', success: 'bg-green-600', warning: 'bg-yellow-600', error: 'bg-red-600' };
+            const toast = document.createElement('div');
+            toast.className = `${colors[type] || colors.info} text-white text-xs font-semibold px-4 py-3 rounded-lg shadow-lg pointer-events-auto transition-opacity`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, duration);
+        }
+
+        // ============ АВТО-ВОЗРАСТ ============
+        function autoAgeUpdate() {
+            const changes = [];
+            let dirty = false;
+            animals.forEach(a => {
+                if (a.status !== 'активен') return;
+                if (a.type === 'Ягненок' && isAtLeastMonths(a.birth, LAMB_AGE_MONTHS)) {
+                    a.type = 'Баран';
+                    changes.push({ tag: a.tag, from: 'Ягненок', to: 'Баран' });
+                    dirty = true;
+                } else if (a.type === 'Ярка' && isAtLeastMonths(a.birth, LAMB_AGE_MONTHS)) {
+                    a.type = 'Овца';
+                    changes.push({ tag: a.tag, from: 'Ярка', to: 'Овца' });
+                    dirty = true;
+                }
+            });
+            if (dirty) saveData();
+            return changes;
+        }
+
+        function notifyAutoAge(changes) {
+            if (!changes || changes.length === 0) return;
+            const details = changes.map(c => `№${c.tag}: ${c.from} → ${c.to}`).join('; ');
+            showToast(`Авто-категория (${LAMB_AGE_MONTHS} мес.): ${details}`, 'info', 7000);
+        }
+
+        // ============ МОДАЛКА ============
+        let modalSubmitHandler = null;
+
+        function openModal(title, bodyHtml, submitLabel, onSubmit) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-body').innerHTML = bodyHtml;
+            modalSubmitHandler = onSubmit;
+            document.getElementById('modal-footer').innerHTML = `
+                <button onclick="closeModal()" class="flex-1 py-2 border rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50">Отмена</button>
+                <button id="modal-submit" class="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700">${submitLabel}</button>
+            `;
+            document.getElementById('modal-submit').onclick = () => {
+                if (modalSubmitHandler && modalSubmitHandler() !== false) closeModal();
+            };
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+            modalSubmitHandler = null;
+        }
+
+        // ============ ГЕНЕТИКА ============
+        function addGeneticsRow(containerId, breed = '', percent = '') {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const row = document.createElement('div');
+            row.className = 'genetics-row flex gap-2 items-center';
+            const isOther = breed && !KNOWN_BREEDS.includes(breed);
+            const opts = KNOWN_BREEDS.map(b => `<option value="${esc(b)}" ${b === breed ? 'selected' : ''}>${esc(b)}</option>`).join('');
+            row.innerHTML = `
+                <select class="breed-select flex-1 min-w-0 p-2 border rounded text-sm bg-white">
+                    <option value="">— порода —</option>
+                    ${opts}
+                    <option value="__other" ${isOther ? 'selected' : ''}>Другая...</option>
+                </select>
+                <input type="text" class="breed-custom flex-1 min-w-0 p-2 border rounded text-sm ${isOther ? '' : 'hidden'}" placeholder="Название" value="${isOther ? esc(breed) : ''}">
+                <input type="number" class="percent-input w-16 p-2 border rounded text-sm" placeholder="%" min="0" max="100" step="1" value="${percent}">
+                <button type="button" class="remove-genetics text-red-500 hover:text-red-700 px-1"><i class="fas fa-xmark"></i></button>
+            `;
+            container.appendChild(row);
+            updateGeneticsSum(container);
+        }
+
+        function updateGeneticsSum(container) {
+            if (!container) return;
+            const wrapper = container.closest('[data-genetics-wrapper]');
+            if (!wrapper) return;
+            let sum = 0;
+            container.querySelectorAll('.percent-input').forEach(inp => sum += parseFloat(inp.value) || 0);
+            const sumEl = wrapper.querySelector('.genetics-sum');
+            if (sumEl) {
+                const cls = Math.abs(sum - 100) < 0.01 ? 'text-green-600' : sum > 100 ? 'text-red-600 font-bold' : 'text-gray-500';
+                sumEl.className = 'genetics-sum text-xs ' + cls;
+                sumEl.textContent = `Сумма: ${sum.toFixed(1)}%`;
+            }
+        }
+
+        function collectGenetics(container) {
+            const result = {};
+            if (!container) return result;
+            container.querySelectorAll('.genetics-row').forEach(row => {
+                const sel = row.querySelector('.breed-select');
+                let breed = sel.value;
+                if (breed === '__other') breed = row.querySelector('.breed-custom').value.trim();
+                const percent = parseFloat(row.querySelector('.percent-input').value) || 0;
+                if (breed && percent > 0) result[breed] = (result[breed] || 0) + percent;
+            });
+            return result;
+        }
+
+        function mixGenetics(fa, mo) {
+            const res = {};
+            const half = src => {
+                if (!src) return;
+                for (const [b, v] of Object.entries(src)) res[b] = (res[b] || 0) + (parseFloat(v) || 0) / 2;
+            };
+            half(fa); half(mo);
+            for (const b in res) res[b] = Math.round(res[b] * 10) / 10;
+            return res;
+        }
+
+        function formatGenetics(g) {
+            const entries = Object.entries(g || {}).filter(([, v]) => v > 0);
+            if (entries.length === 0) return '<span class="text-xs text-gray-400 italic">не указана</span>';
+            return entries.map(([b, v]) => `<span class="inline-block bg-indigo-50 border border-indigo-100 text-indigo-800 text-[11px] font-semibold px-2 py-0.5 rounded mr-1 mb-1">${esc(b)} ${(+v).toFixed(1)}%</span>`).join('');
+        }
+
+        document.addEventListener('click', e => {
+            if (e.target.closest('.remove-genetics')) {
+                const row = e.target.closest('.genetics-row');
+                const container = row.parentElement;
+                row.remove();
+                updateGeneticsSum(container);
+            }
+        });
+        document.addEventListener('change', e => {
+            if (e.target.classList.contains('breed-select')) {
+                const row = e.target.closest('.genetics-row');
+                const custom = row.querySelector('.breed-custom');
+                if (e.target.value === '__other') custom.classList.remove('hidden');
+                else { custom.classList.add('hidden'); custom.value = ''; }
+            }
+        });
+        document.addEventListener('input', e => {
+            if (e.target.classList.contains('percent-input')) {
+                updateGeneticsSum(e.target.closest('.genetics-container'));
+            }
+        });
+
+        // ============ НАВИГАЦИЯ ============
+        function switchTab(tabName) {
+            notifyAutoAge(autoAgeUpdate());
+
+            ['register', 'herd', 'vaccines', 'slaughter', 'detail'].forEach(id => {
+                document.getElementById('view-' + id).classList.add('hidden');
+            });
+            ['register', 'herd', 'vaccines', 'slaughter'].forEach(id => {
+                const btn = document.getElementById('nav-' + id);
+                if (!btn) return;
+                btn.classList.remove('tab-active');
+                btn.classList.add('tab-inactive');
+            });
+            document.getElementById('view-' + tabName).classList.remove('hidden');
+            const activeBtn = document.getElementById('nav-' + tabName);
+            if (activeBtn) { activeBtn.classList.remove('tab-inactive'); activeBtn.classList.add('tab-active'); }
+
+            if (tabName === 'herd') { closeHerdCategory(); updateHerdCounts(); }
+            else if (tabName === 'vaccines') renderVaccinesTab();
+            else if (tabName === 'slaughter') renderSlaughterTab();
+        }
+
+        // ============ ПРОВЕРКА РОДИТЕЛЕЙ ============
+        function validateParents(fatherTag, motherTag, excludeTag = null) {
+            const warns = [];
+            if (fatherTag) {
+                const f = animals.find(a => a.tag === fatherTag && a.tag !== excludeTag);
+                if (!f) warns.push(`• Баран с биркой №${fatherTag} не найден в базе.`);
+                else if (f.type !== 'Баран') warns.push(`• Животное №${fatherTag} — это "${f.type}", а не "Баран".`);
+            }
+            if (motherTag) {
+                const m = animals.find(a => a.tag === motherTag && a.tag !== excludeTag);
+                if (!m) warns.push(`• Овца с биркой №${motherTag} не найдена в базе.`);
+                else if (m.type !== 'Овца') warns.push(`• Животное №${motherTag} — это "${m.type}", а не "Овца".`);
+            }
+            return warns;
+        }
+
+        // ============ РЕГИСТРАЦИЯ ============
+        document.getElementById('form-birth').value = todayISO();
+        document.getElementById('form-birth').setAttribute('max', todayISO());
+        addGeneticsRow('reg-genetics-rows');
+        document.getElementById('form-birth').addEventListener('change', updateTypeOptionsForBirth);
+
+        function updateTypeOptionsForBirth() {
+            const birthVal = document.getElementById('form-birth').value;
+            const select = document.getElementById('form-type');
+            const hint = document.getElementById('form-type-hint');
+            const isAdult = birthVal && isAtLeastMonths(birthVal, LAMB_AGE_MONTHS);
+
+            Array.from(select.options).forEach(opt => {
+                if (opt.value === 'Ягненок' || opt.value === 'Ярка') {
+                    opt.disabled = isAdult;
+                }
+            });
+
+            if (isAdult) {
+                hint.classList.remove('hidden');
+                if (select.value === 'Ягненок' || select.value === 'Ярка') {
+                    const was = select.value;
+                    select.value = was === 'Ягненок' ? 'Баран' : 'Овца';
+                    showToast(`Возраст > ${LAMB_AGE_MONTHS} мес.: тип изменён на "${select.value}"`, 'info', 4000);
+                }
+            } else {
+                hint.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('animal-form').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const tag = document.getElementById('form-tag').value.trim();
+            if (!tag) { alert('Укажите номер бирки.'); return; }
+            if (animals.some(a => a.tag === tag)) { alert('Животное с биркой №' + tag + ' уже зарегистрировано!'); return; }
+
+            const birthDate = document.getElementById('form-birth').value;
+            if (!birthDate) { alert('Укажите дату рождения.'); return; }
+            if (birthDate > todayISO()) { alert('Дата рождения не может быть в будущем.'); return; }
+
+            const type = document.getElementById('form-type').value;
+            if (isAtLeastMonths(birthDate, LAMB_AGE_MONTHS) && (type === 'Ягненок' || type === 'Ярка')) {
+                alert(`Животное старше ${LAMB_AGE_MONTHS} месяцев не может быть ягнёнком или яркой.\nВыберите Барана или Овцу.`);
+                return;
+            }
+
+            const father = document.getElementById('form-father').value.trim() || null;
+            const mother = document.getElementById('form-mother').value.trim() || null;
+            const warns = validateParents(father, mother);
+            if (warns.length && !confirm('Проверьте родителей:\n\n' + warns.join('\n') + '\n\nВсё равно сохранить?')) return;
+
+            animals.push({
+                tag: tag,
+                type: type,
+                weight: parseFloat(document.getElementById('form-weight').value) || 0,
+                father: father,
+                mother: mother,
+                birth: birthDate,
+                status: 'активен',
+                lambings: 0,
+                vaccines: [],
+                photo: regPhotoData,
+                genetics: collectGenetics(document.getElementById('reg-genetics-rows'))
+            });
+
+            await saveData();
+            alert('Животное №' + tag + ' успешно добавлено!');
+            this.reset();
+            document.getElementById('form-birth').value = todayISO();
+            document.getElementById('form-birth').setAttribute('max', todayISO());
+            updateTypeOptionsForBirth();
+            document.getElementById('reg-genetics-rows').innerHTML = '';
+            addGeneticsRow('reg-genetics-rows');
+            regPhotoData = null;
+            updateRegPhotoPreview();
+        });
+
+        // ============ ОТАРА ============
+        function updateHerdCounts() {
+            const active = animals.filter(a => a.status === 'активен');
+            document.getElementById('count-rams').textContent = active.filter(a => a.type === 'Баран').length;
+            document.getElementById('count-ewes').textContent = active.filter(a => a.type === 'Овца').length;
+            document.getElementById('count-lambs-m').textContent = active.filter(a => a.type === 'Ягненок').length;
+            document.getElementById('count-lambs-f').textContent = active.filter(a => a.type === 'Ярка').length;
+            document.getElementById('count-total').textContent = active.length;
+        }
+
+        document.querySelectorAll('.herd-cat').forEach(el => {
+            el.addEventListener('click', () => openHerdCategory(el.dataset.category));
+        });
+
+        function openHerdCategory(category) {
+            document.getElementById('herd-summary').classList.add('hidden');
+            document.getElementById('herd-filtered-view').classList.remove('hidden');
+            const titles = { 'Баран': 'Список: Бараны', 'Овца': 'Список: Овцы', 'Ягненок': 'Список: Ягнята', 'Ярка': 'Список: Ярки', 'Все': 'Общий список отары' };
+            document.getElementById('herd-category-title').textContent = titles[category] || 'Список';
+
+            const active = animals.filter(a => a.status === 'активен');
+            const filtered = sortedAnimals(category === 'Все' ? active : active.filter(a => a.type === category));
+            const container = document.getElementById('herd-filtered-list');
+            container.innerHTML = '';
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 text-xs text-center py-4">В этой категории пока нет животных.</p>';
+                return;
+            }
+
+            filtered.forEach(animal => {
+                const item = document.createElement('div');
+                item.className = 'p-3 border rounded-lg bg-gray-50 hover:bg-green-50 cursor-pointer transition';
+                item.innerHTML = `
+                    <div class="flex gap-2 items-start">
+                        ${photoThumb(animal, 12)}
+                        <div class="flex-1 min-w-0 flex justify-between items-start">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center space-x-2 flex-wrap">
+                                    <span class="font-bold text-gray-800 text-sm">№ ${esc(animal.tag)}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-white border font-medium text-gray-600">${esc(animal.type)}</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Отец: ${esc(animal.father || '-')} | Мать: ${esc(animal.mother || '-')}</p>
+                                <div class="mt-1">${formatGenetics(animal.genetics)}</div>
+                            </div>
+                            <div class="text-right ml-2 flex-shrink-0">
+                                <span class="text-xs font-bold text-gray-700 block">${animal.weight ? esc(animal.weight) + ' кг' : ''}</span>
+                                <i class="fas fa-chevron-right text-green-600 text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                item.addEventListener('click', () => openAnimalDetail(animal.tag, 'herd', category));
+                container.appendChild(item);
+            });
+        }
+
+        function closeHerdCategory() {
+            document.getElementById('herd-filtered-view').classList.add('hidden');
+            document.getElementById('herd-summary').classList.remove('hidden');
+        }
+
+        // ============ ВАКЦИНАЦИИ ============
+        function renderVaccinesTab() {
+            const list = sortedAnimals(animals);
+            const container = document.getElementById('vaccines-list');
+            container.innerHTML = '';
+            if (list.length === 0) { container.innerHTML = '<p class="text-gray-400 text-xs text-center py-4">Животных пока нет.</p>'; return; }
+
+            list.forEach(animal => {
+                const vaxText = animal.vaccines.length > 0
+                    ? animal.vaccines.map(v => esc(v.name)).join(', ')
+                    : 'Прививок не ставилось';
+                const deadBadge = animal.status === 'убой'
+                    ? '<span class="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">убой</span>' : '';
+                const item = document.createElement('div');
+                item.className = 'p-3 border rounded-lg bg-gray-50 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition';
+                item.innerHTML = `
+                    <div class="flex gap-2 items-center min-w-0 flex-1">
+                        ${photoThumb(animal, 10)}
+                        <div class="pr-2 min-w-0 flex-1">
+                            <div class="flex items-center space-x-2 mb-1 flex-wrap">
+                                <span class="font-bold text-gray-800 text-sm">№ ${esc(animal.tag)}</span>
+                                <span class="text-xs text-gray-500">(${esc(animal.type)})</span>
+                                ${deadBadge}
+                            </div>
+                            <p class="text-xs text-gray-700 truncate"><i class="fas fa-syringe text-blue-500 mr-1"></i>${vaxText}</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400 text-xs flex-shrink-0"></i>
+                `;
+                item.addEventListener('click', () => openAnimalDetail(animal.tag, 'vaccines'));
+                container.appendChild(item);
+            });
+        }
+
+        // ============ УБОЙ ============
+        function renderSlaughterTab() {
+            const slaughtered = sortedAnimals(animals.filter(a => a.status === 'убой'));
+            const container = document.getElementById('slaughter-list');
+            container.innerHTML = '';
+            if (slaughtered.length === 0) { container.innerHTML = '<p class="text-gray-400 text-xs text-center py-4">Список убоя пуст.</p>'; return; }
+
+            slaughtered.forEach(animal => {
+                let gainBadge = '';
+                if (animal.slaughterWeight != null && animal.weight) {
+                    const gain = (animal.slaughterWeight - animal.weight).toFixed(1);
+                    gainBadge = `<span class="text-xs text-green-700 bg-green-100 px-1.5 py-0.5 rounded ml-1">Привес: ${gain > 0 ? '+' + gain : gain} кг</span>`;
+                }
+                const item = document.createElement('div');
+                item.className = 'p-3 border border-red-200 rounded-lg bg-red-50 flex justify-between items-center cursor-pointer';
+                item.innerHTML = `
+                    <div class="flex gap-2 items-center min-w-0 flex-1">
+                        ${photoThumb(animal, 10)}
+                        <div class="min-w-0">
+                            <span class="font-bold text-gray-800 text-sm">№ ${esc(animal.tag)}</span>
+                            <span class="text-xs text-gray-600 ml-1">(${esc(animal.type)})</span>
+                            <p class="text-xs text-gray-500 mt-1">Дата убоя: ${esc(animal.slaughterDate || 'не указана')}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-sm font-extrabold text-red-700 block">Убойный вес: ${animal.slaughterWeight != null ? esc(animal.slaughterWeight) + ' кг' : '—'}</span>
+                        ${gainBadge}
+                    </div>
+                `;
+                item.addEventListener('click', () => openAnimalDetail(animal.tag, 'slaughter'));
+                container.appendChild(item);
+            });
+        }
+
+        // ============ КАРТОЧКА ЖИВОТНОГО ============
+        function openAnimalDetail(tag, fromTab, herdCategory) {
+            previousViewBeforeDetail = { tab: fromTab, category: herdCategory || null };
+            const animal = animals.find(a => a.tag === tag);
+            if (!animal) return;
+
+            ['register', 'herd', 'vaccines', 'slaughter'].forEach(id => {
+                document.getElementById('view-' + id).classList.add('hidden');
+            });
+            document.getElementById('view-detail').classList.remove('hidden');
+
+            let vaccinesHtml = '<p class="text-xs text-gray-400 italic">Записей о вакцинации нет.</p>';
+            if (animal.vaccines.length > 0) {
+                vaccinesHtml = '<ul class="space-y-1.5">' + animal.vaccines.map(v => `
+                    <li class="flex justify-between items-center bg-blue-50 px-3 py-2 rounded text-xs">
+                        <span class="font-semibold text-gray-800"><i class="fas fa-circle-check text-blue-500 mr-1.5"></i>${esc(v.name)}</span>
+                        <span class="text-gray-500 font-medium">${esc(v.date)}</span>
+                    </li>
+                `).join('') + '</ul>';
+            }
+
+            const lambingSection = animal.type === 'Овца' ? `
+                <div class="bg-pink-50 border border-pink-100 rounded-lg p-3 mb-4 flex justify-between items-center">
+                    <div>
+                        <p class="text-xs text-pink-800 font-semibold">Принесла ягнят всего:</p>
+                        <p class="text-lg font-extrabold text-pink-600">${animal.lambings || 0} гол.</p>
+                    </div>
+                    ${animal.status === 'активен' ? `
+                        <button data-action="lambing" data-tag="${esc(animal.tag)}" class="bg-pink-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-pink-700 transition">
+                            + Записать окот
+                        </button>` : ''}
+                </div>` : '';
+
+            const bottomSection = animal.status === 'активен' ? `
+                <div class="border-t pt-4 mt-4">
+                    <button data-action="slaughter" data-tag="${esc(animal.tag)}" class="w-full bg-red-50 text-red-700 border border-red-200 font-bold py-2.5 rounded-lg text-xs hover:bg-red-100 transition">
+                        <i class="fas fa-scale-balanced mr-1"></i> Отправить на убой
+                    </button>
+                </div>` : `
+                <div class="border-t pt-4 mt-4">
+                    <button data-action="return" data-tag="${esc(animal.tag)}" class="w-full bg-green-50 text-green-700 border border-green-200 font-bold py-2.5 rounded-lg text-xs hover:bg-green-100 transition">
+                        <i class="fas fa-rotate-left mr-1"></i> Вернуть в отару (отменить убой)
+                    </button>
+                </div>`;
+
+            const photoBlock = animal.photo
+                ? `<img src="${animal.photo}" data-action="photo" data-tag="${esc(animal.tag)}" class="w-20 h-20 rounded-xl object-cover border cursor-pointer flex-shrink-0 hover:opacity-80 transition" alt="">`
+                : `<div class="w-20 h-20 rounded-xl bg-gray-100 border flex items-center justify-center flex-shrink-0"><i class="fas fa-camera text-gray-300 text-2xl"></i></div>`;
+
+            document.getElementById('detail-content').innerHTML = `
+                <div class="flex gap-3 border-b pb-3 mb-4 items-start">
+                    ${photoBlock}
+                    <div class="flex-1 min-w-0">
+                        <h2 class="text-xl font-extrabold text-gray-900">Бирка № ${esc(animal.tag)}</h2>
+                        <div class="mt-1 flex flex-wrap gap-1">
+                            <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-green-100 text-green-800">${esc(animal.type)}</span>
+                            <span class="text-xs font-bold uppercase px-2 py-0.5 rounded ${animal.status === 'активен' ? 'bg-gray-100 text-green-700' : 'bg-red-100 text-red-700'}">${esc(animal.status)}</span>
+                        </div>
+                        <div class="flex gap-1.5 mt-2">
+                            <button data-action="edit" data-tag="${esc(animal.tag)}" title="Редактировать" class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition">
+                                <i class="fas fa-pen text-xs"></i>
+                            </button>
+                            <button data-action="delete" data-tag="${esc(animal.tag)}" title="Удалить" class="text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition">
+                                <i class="fas fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-lg border mb-4 text-xs">
+                    <div>
+                        <span class="text-gray-500 block">Дата рождения:</span>
+                        <span class="font-bold text-gray-800">${esc(animal.birth || '—')}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500 block">Вес:</span>
+                        <span class="font-bold text-gray-800">${animal.weight ? esc(animal.weight) + ' кг' : '—'}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500 block">Отец:</span>
+                        <span class="font-bold text-indigo-700">${animal.father ? '№ ' + esc(animal.father) : '—'}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500 block">Мать:</span>
+                        <span class="font-bold text-pink-700">${animal.mother ? '№ ' + esc(animal.mother) : '—'}</span>
+                    </div>
+                    ${animal.status === 'убой' ? `
+                        <div>
+                            <span class="text-gray-500 block">Убойный вес:</span>
+                            <span class="font-bold text-red-700">${animal.slaughterWeight != null ? esc(animal.slaughterWeight) + ' кг' : '—'}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 block">Дата убоя:</span>
+                            <span class="font-bold text-red-700">${esc(animal.slaughterDate || '—')}</span>
+                        </div>` : ''}
+                </div>
+
+                <div class="mb-4">
+                    <h3 class="text-sm font-bold text-gray-800 mb-2">Генетика (породы)</h3>
+                    <div>${formatGenetics(animal.genetics)}</div>
+                </div>
+
+                ${lambingSection}
+
+                <div class="mb-5">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-sm font-bold text-gray-800">Прививки и препараты</h3>
+                        ${animal.status === 'активен' ? `
+                            <button data-action="vaccine" data-tag="${esc(animal.tag)}" class="text-xs bg-blue-600 text-white font-bold px-2.5 py-1.5 rounded-lg hover:bg-blue-700 transition">
+                                + Добавить укол
+                            </button>` : ''}
+                    </div>
+                    ${vaccinesHtml}
+                </div>
+
+                ${bottomSection}
+            `;
+        }
+
+        document.getElementById('detail-content').addEventListener('click', e => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const action = btn.dataset.action, tag = btn.dataset.tag;
+            if (action === 'vaccine') openVaccineModal(tag);
+            else if (action === 'lambing') openLambingModal(tag);
+            else if (action === 'slaughter') openSlaughterModal(tag);
+            else if (action === 'edit') openEditModal(tag);
+            else if (action === 'delete') confirmDeleteAnimal(tag);
+            else if (action === 'return') confirmReturnToHerd(tag);
+            else if (action === 'photo') openPhotoView(tag);
+        });
+
+        function closeAnimalDetail() {
+            document.getElementById('view-detail').classList.add('hidden');
+            const p = previousViewBeforeDetail;
+            switchTab(p.tab);
+            if (p.tab === 'herd' && p.category) openHerdCategory(p.category);
+        }
+
+        // ============ ДЕЙСТВИЯ ============
+        function openVaccineModal(tag) {
+            const animal = animals.find(a => a.tag === tag);
+            if (!animal) return;
+            openModal('Новый укол — животное №' + tag, `
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Название вакцины / препарата *</label>
+                        <input type="text" id="vax-name" class="w-full p-2.5 border rounded-lg text-sm" placeholder="Например: Сибирская язва">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Дата укола</label>
+                        <input type="text" id="vax-date" value="${todayRU()}" class="w-full p-2.5 border rounded-lg text-sm" placeholder="ДД.ММ.ГГГГ">
+                    </div>
+                </div>
+            `, 'Добавить', async () => {
+                const name = document.getElementById('vax-name').value.trim();
+                if (!name) { alert('Укажите название'); return false; }
+                const date = document.getElementById('vax-date').value.trim() || todayRU();
+                animal.vaccines.push({ name, date });
+                await saveData();
+                openAnimalDetail(tag, previousViewBeforeDetail.tab, previousViewBeforeDetail.category);
+                return true;
+            });
+        }
+
+        function openLambingModal(motherTag) {
+            const mother = animals.find(a => a.tag === motherTag);
+            if (!mother) return;
+            openModal('Окот — овца №' + motherTag, `
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Количество ягнят</label>
+                        <input type="number" id="lamb-count" min="1" max="10" value="1" class="w-full p-2.5 border rounded-lg text-sm" oninput="updateLambRows()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Бирка отца (барана)</label>
+                        <input type="text" id="lamb-father" class="w-full p-2.5 border rounded-lg text-sm" placeholder="Оставьте пустым, если неизвестен">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Пол каждого ягнёнка</label>
+                        <div id="lamb-genders" class="space-y-1.5"></div>
+                    </div>
+                    <p class="text-[11px] text-gray-500 italic">Проценты генетики потомков — среднее от отца и матери.</p>
+                </div>
+            `, 'Записать', async () => {
+                const count = parseInt(document.getElementById('lamb-count').value, 10);
+                if (isNaN(count) || count < 1 || count > 10) { alert('Количество от 1 до 10'); return false; }
+                const fatherTag = document.getElementById('lamb-father').value.trim() || null;
+
+                let father = null;
+                if (fatherTag) {
+                    father = animals.find(a => a.tag === fatherTag);
+                    if (!father) {
+                        if (!confirm(`Баран с биркой №${fatherTag} не найден. Продолжить без генетики отца?`)) return false;
+                    } else if (father.type !== 'Баран') {
+                        if (!confirm(`Животное №${fatherTag} — это "${father.type}", а не Баран. Продолжить?`)) return false;
+                    }
+                }
+
+                const genders = [];
+                document.querySelectorAll('#lamb-genders .lamb-gender').forEach(s => genders.push(s.value));
+                if (genders.length !== count) { alert('Ошибка: количество полей'); return false; }
+
+                const prev = mother.lambings || 0;
+                mother.lambings = prev + count;
+
+                for (let i = 0; i < count; i++) {
+                    const childType = genders[i] === 'м' ? 'Ягненок' : 'Ярка';
+                    let childTag = `${motherTag}-${prev + i + 1}`;
+                    let suffix = 1;
+                    const base = childTag;
+                    while (animals.some(a => a.tag === childTag)) childTag = base + '-' + suffix++;
+
+                    animals.push({
+                        tag: childTag,
+                        type: childType,
+                        weight: 4.0,
+                        father: fatherTag,
+                        mother: motherTag,
+                        birth: todayISO(),
+                        status: 'активен',
+                        lambings: 0,
+                        vaccines: [],
+                        photo: null,
+                        genetics: mixGenetics(father ? father.genetics : null, mother.genetics)
+                    });
+                }
+
+                await saveData();
+                alert(`Окот записан! Добавлено: ${count} гол.`);
+                openAnimalDetail(motherTag, previousViewBeforeDetail.tab, previousViewBeforeDetail.category);
+                return true;
+            });
+            updateLambRows();
+        }
+
+        function updateLambRows() {
+            const count = parseInt(document.getElementById('lamb-count').value, 10) || 1;
+            const container = document.getElementById('lamb-genders');
+            if (!container) return;
+            container.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2';
+                row.innerHTML = `
+                    <span class="text-xs text-gray-500 w-20">Ягнёнок ${i + 1}:</span>
+                    <select class="lamb-gender flex-1 p-2 border rounded text-sm bg-white">
+                        <option value="м">Ягнёнок (мальчик)</option>
+                        <option value="д">Ярка (девочка)</option>
+                    </select>
+                `;
+                container.appendChild(row);
+            }
+        }
+
+        function openSlaughterModal(tag) {
+            const animal = animals.find(a => a.tag === tag);
+            if (!animal) return;
+            openModal('Убой — животное №' + tag, `
+                <div class="space-y-3">
+                    <p class="text-xs text-gray-600">После убоя животное переместится в раздел «Убой».</p>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Убойный вес туши (кг) *</label>
+                        <input type="number" step="0.1" id="sl-weight" class="w-full p-2.5 border rounded-lg text-sm" placeholder="Например: 62.5">
+                    </div>
+                </div>
+            `, 'Зафиксировать', async () => {
+                const w = parseFloat(document.getElementById('sl-weight').value);
+                if (isNaN(w) || w <= 0) { alert('Введите корректный вес'); return false; }
+                animal.status = 'убой';
+                animal.slaughterWeight = w;
+                animal.slaughterDate = todayRU();
+                await saveData();
+                switchTab('slaughter');
+                return true;
+            });
+        }
+
+        async function confirmReturnToHerd(tag) {
+            const animal = animals.find(a => a.tag === tag);
+            if (!animal) return;
+            if (animal.status !== 'убой') { showToast('Животное не находится в убое', 'error'); return; }
+            const details = `Убойный вес: ${animal.slaughterWeight != null ? animal.slaughterWeight + ' кг' : '—'}\nДата убоя: ${animal.slaughterDate || '—'}`;
+            if (!confirm(`Вернуть животное №${tag} в отару?\n\n${details}\n\nЭти данные будут удалены, животное снова станет активным.`)) return;
+
+            animal.status = 'активен';
+            delete animal.slaughterWeight;
+            delete animal.slaughterDate;
+            await saveData();
+            showToast(`Животное №${tag} возвращено в отару`, 'success', 4000);
+            switchTab('herd');
+        }
+
+        function openEditModal(tag) {
+            const animal = animals.find(a => a.tag === tag);
+            if (!animal) return;
+
+            let editPhotoData = animal.photo || null;
+            const genId = 'edit-genetics-rows';
+            const types = ['Овца', 'Баран', 'Ягненок', 'Ярка'];
+
+            openModal('Редактирование — №' + tag, `
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Фото</label>
+                        <div class="flex items-center gap-3">
+                            <div id="edit-photo-preview" class="w-16 h-16 rounded-lg bg-gray-100 border flex items-center justify-center overflow-hidden">
+                                ${editPhotoData
+                                    ? `<img src="${editPhotoData}" class="w-full h-full object-cover" alt="">`
+                                    : '<i class="fas fa-camera text-gray-400 text-xl"></i>'}
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <button type="button" onclick="document.getElementById('edit-photo').click()" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-bold text-gray-700">
+                                    <i class="fas fa-upload mr-1"></i> ${editPhotoData ? 'Сменить' : 'Загрузить'}
+                                </button>
+                                <button type="button" id="edit-photo-clear" onclick="clearEditPhoto()" class="text-xs text-red-600 hover:text-red-700 px-3 py-1 ${editPhotoData ? '' : 'hidden'}">
+                                    <i class="fas fa-trash mr-1"></i> Удалить фото
+                                </button>
+                            </div>
+                            <input type="file" id="edit-photo" accept="image/*" class="hidden">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Номер бирки *</label>
+                        <input type="text" id="edit-tag" value="${esc(animal.tag)}" class="w-full p-2.5 border rounded-lg text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Категория</label>
+                            <select id="edit-type" class="w-full p-2.5 border rounded-lg text-sm bg-white">
+                                ${types.map(t => `<option ${animal.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Вес (кг)</label>
+                            <input type="number" step="0.1" id="edit-weight" value="${animal.weight || ''}" class="w-full p-2.5 border rounded-lg text-sm">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Бирка отца</label>
+                            <input type="text" id="edit-father" value="${esc(animal.father || '')}" class="w-full p-2.5 border rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Бирка матери</label>
+                            <input type="text" id="edit-mother" value="${esc(animal.mother || '')}" class="w-full p-2.5 border rounded-lg text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Дата рождения</label>
+                        <input type="date" id="edit-birth" value="${animal.birth || ''}" class="w-full p-2.5 border rounded-lg text-sm">
+                    </div>
+                    <div data-genetics-wrapper>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Генетика</label>
+                        <div class="genetics-container space-y-2 mb-2" id="${genId}"></div>
+                        <div class="flex justify-between items-center">
+                            <button type="button" onclick="addGeneticsRow('${genId}')" class="text-xs text-green-600 font-bold hover:underline">+ порода</button>
+                            <p class="genetics-sum text-xs text-gray-500">Сумма: 0%</p>
+                        </div>
+                    </div>
+                </div>
+            `, 'Сохранить', async () => {
+                const newTag = document.getElementById('edit-tag').value.trim();
+                if (!newTag) { alert('Бирка не может быть пустой'); return false; }
+                if (newTag !== animal.tag && animals.some(a => a.tag === newTag)) { alert('Эта бирка уже используется'); return false; }
+
+                const editBirth = document.getElementById('edit-birth').value;
+                const editType = document.getElementById('edit-type').value;
+                if (editBirth && isAtLeastMonths(editBirth, LAMB_AGE_MONTHS) && (editType === 'Ягненок' || editType === 'Ярка')) {
+                    alert(`Животное старше ${LAMB_AGE_MONTHS} месяцев не может быть ягнёнком или яркой. Выберите Барана или Овцу.`);
+                    return false;
+                }
+
+                const newFather = document.getElementById('edit-father').value.trim() || null;
+                const newMother = document.getElementById('edit-mother').value.trim() || null;
+                const warns = validateParents(newFather, newMother, animal.tag);
+                if (warns.length && !confirm('Проверьте родителей:\n\n' + warns.join('\n') + '\n\nВсё равно сохранить?')) return false;
+
+                if (newTag !== animal.tag) {
+                    animals.forEach(a => {
+                        if (a.father === animal.tag) a.father = newTag;
+                        if (a.mother === animal.tag) a.mother = newTag;
+                    });
+                }
+
+                animal.tag = newTag;
+                animal.type = editType;
+                animal.weight = parseFloat(document.getElementById('edit-weight').value) || 0;
+                animal.father = newFather;
+                animal.mother = newMother;
+                animal.birth = editBirth;
+                animal.photo = editPhotoData;
+                animal.genetics = collectGenetics(document.getElementById(genId));
+                await saveData();
+                openAnimalDetail(newTag, previousViewBeforeDetail.tab, previousViewBeforeDetail.category);
+                return true;
+            });
+
+            const entries = Object.entries(animal.genetics || {});
+            if (entries.length === 0) addGeneticsRow(genId);
+            else entries.forEach(([b, p]) => addGeneticsRow(genId, b, p));
+
+            document.getElementById('edit-photo').addEventListener('change', async function (e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                try {
+                    editPhotoData = await compressImage(file);
+                    const preview = document.getElementById('edit-photo-preview');
+                    if (preview) preview.innerHTML = `<img src="${editPhotoData}" class="w-full h-full object-cover" alt="">`;
+                    const clearBtn = document.getElementById('edit-photo-clear');
+                    if (clearBtn) clearBtn.classList.remove('hidden');
+                } catch (err) {
+                    alert('Не удалось загрузить фото: ' + err.message);
+                }
+                e.target.value = '';
+            });
+
+            window.clearEditPhoto = function () {
+                editPhotoData = null;
+                const preview = document.getElementById('edit-photo-preview');
+                if (preview) preview.innerHTML = '<i class="fas fa-camera text-gray-400 text-xl"></i>';
+                const clearBtn = document.getElementById('edit-photo-clear');
+                if (clearBtn) clearBtn.classList.add('hidden');
+            };
+        }
+
+        async function confirmDeleteAnimal(tag) {
+            const animal = animals.find(a => a.tag === tag);
+            if (!animal) return;
+            const children = animals.filter(a => a.father === tag || a.mother === tag);
+            let msg = `Удалить животное №${tag} (${animal.type})?\n\nДанные будут потеряны безвозвратно.`;
+            if (children.length > 0) {
+                msg += `\n\n⚠ У ${children.length} животных эта бирка указана как родитель. Ссылки перестанут находить животное.`;
+            }
+            if (!confirm(msg)) return;
+            animals = animals.filter(a => a.tag !== tag);
+            await saveData();
+            closeAnimalDetail();
+        }
+
+        // ============ ЭКСПОРТ / ИМПОРТ / ПОДЕЛИТЬСЯ ============
+        function buildBlob() {
+            const data = JSON.stringify(animals, null, 2);
+            return new Blob([data], { type: 'application/json' });
+        }
+
+        function exportData() {
+            const blob = buildBlob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `oshari_${todayISO()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function shareData() {
+            const blob = buildBlob();
+            const fileName = `oshari_${todayISO()}.json`;
+            const file = new File([blob], fileName, { type: 'application/json' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: 'База отары',
+                        text: `Экспорт базы животных от ${todayRU()}`
+                    });
+                    showToast('База отправлена', 'success', 3000);
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    console.error(err);
+                    showToast('Не удалось отправить: ' + err.message, 'error', 5000);
+                    exportData();
+                }
+            } else {
+                showToast('Отправка не поддерживается в этом браузере. Файл скачан — отправьте его вручную.', 'warning', 6000);
+                exportData();
+            }
+        }
+
+        function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!Array.isArray(data)) throw new Error('Файл должен содержать массив животных');
+                    data.forEach(a => {
+                        if (!a.tag) throw new Error('У одной из записей нет бирки');
+                        if (!Array.isArray(a.vaccines)) a.vaccines = [];
+                        if (!a.genetics || typeof a.genetics !== 'object') a.genetics = {};
+                        if (typeof a.photo !== 'string') a.photo = null;
+                    });
+                    const replace = confirm(`Импортировано записей: ${data.length}.\n\nОК — заменить текущие данные.\nОтмена — объединить (добавить только новые бирки).`);
+                    if (replace) {
+                        animals = data;
+                        alert('База заменена.');
+                    } else {
+                        let added = 0;
+                        data.forEach(a => {
+                            if (!animals.some(ex => ex.tag === a.tag)) { animals.push(a); added++; }
+                        });
+                        alert(`Добавлено новых животных: ${added}`);
+                    }
+                    await saveData();
+                    notifyAutoAge(autoAgeUpdate());
+                    switchTab('herd');
+                } catch (err) {
+                    alert('Ошибка импорта: ' + err.message);
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        // ============ INIT (асинхронная загрузка) ============
+        (async function init() {
+            const stored = await loadDataFromDB();
+            if (stored && Array.isArray(stored) && stored.length > 0) {
+                animals = normalizeAnimals(stored);
+            } else {
+                animals = normalizeAnimals(JSON.parse(JSON.stringify(seedData)));
+                await saveData();
+            }
+
+            const changes = autoAgeUpdate();
+            if (changes.length > 0) {
+                setTimeout(() => notifyAutoAge(changes), 300);
+            }
+            updateTypeOptionsForBirth();
+        })();
+    </script>
+</body>
+</html>
